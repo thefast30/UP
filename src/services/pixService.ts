@@ -11,22 +11,45 @@ export async function gerarPix(
   amountCentavos: number,
   itemName: string
 ): Promise<PixResponse> {
+  // Validações de entrada mais rigorosas
+  if (!name || name.trim().length < 2) {
+    throw new Error('Nome deve ter pelo menos 2 caracteres');
+  }
+  
+  if (!email || !email.includes('@')) {
+    throw new Error('Email inválido');
+  }
+  
+  const cpfLimpo = cpf.replace(/\D/g, '');
+  if (cpfLimpo.length !== 11) {
+    throw new Error('CPF deve ter 11 dígitos');
+  }
+  
+  const phoneLimpo = phone.replace(/\D/g, '');
+  if (phoneLimpo.length < 10 || phoneLimpo.length > 11) {
+    throw new Error('Telefone deve ter 10 ou 11 dígitos');
+  }
+  
+  if (amountCentavos <= 0) {
+    throw new Error('Valor deve ser maior que zero');
+  }
+
   if (!navigator.onLine) {
     throw new Error('Sem conexão com a internet. Por favor, verifique sua conexão e tente novamente.');
   }
 
   const requestBody: PixRequest = {
-    name,
-    email,
-    cpf,
-    phone,
+    name: name.trim(),
+    email: email.trim().toLowerCase(),
+    cpf: cpfLimpo,
+    phone: phoneLimpo,
     paymentMethod: 'PIX',
     amount: amountCentavos,
     traceable: true,
     items: [
       {
         unitPrice: amountCentavos,
-        title: itemName,
+        title: itemName.trim(),
         quantity: 1,
         tangible: false
       }
@@ -36,7 +59,11 @@ export async function gerarPix(
   try {
     console.log('Enviando requisição PIX:', {
       url: API_URL,
-      body: requestBody
+      body: {
+        ...requestBody,
+        cpf: '***.***.***-**', // Mascarar CPF no log
+        phone: '(**) *****-****' // Mascarar telefone no log
+      }
     });
 
     const response = await fetch(API_URL, {
@@ -44,7 +71,8 @@ export async function gerarPix(
       headers: {
         'Content-Type': 'application/json',
         'Authorization': SECRET_KEY,
-        'Accept': 'application/json'
+        'Accept': 'application/json',
+        'User-Agent': 'UpsellApp/1.0'
       },
       body: JSON.stringify(requestBody)
     });
@@ -59,6 +87,19 @@ export async function gerarPix(
         throw new Error('API não encontrada. Por favor, tente novamente mais tarde.');
       } else if (response.status === 403) {
         throw new Error('Acesso negado. Verifique se a chave de API está correta.');
+      } else if (response.status === 400) {
+        let errorMessage = 'Dados inválidos. Verifique as informações e tente novamente.';
+        try {
+          const errorData = JSON.parse(responseText);
+          if (errorData.message) {
+            errorMessage = errorData.message;
+          } else if (errorData.error) {
+            errorMessage = errorData.error;
+          }
+        } catch (e) {
+          // Manter mensagem padrão se não conseguir parsear
+        }
+        throw new Error(errorMessage);
       } else if (response.status === 500) {
         throw new Error('Erro no processamento do pagamento. Por favor, aguarde alguns minutos e tente novamente. Se o problema persistir, entre em contato com o suporte.');
       } else if (response.status === 0) {
