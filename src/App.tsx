@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Star, Zap, Clock, Award, ChevronRight, X, AlertTriangle, Gift, MessageCircle, CheckCircle, ArrowRight } from 'lucide-react';
-import { getUTMParams, storeUTMParams, getStoredUTMParams, buildUTMString, trackEvent } from './utils/utm';
+import { getUTMParams, storeUTMParams, getStoredUTMParams, buildUTMString, trackEvent, initializeUTMTracking, getCheckoutUrl } from './utils/utm';
 import { TrackingDebug } from './components/TrackingDebug';
 import { PaymentModal } from './components/PaymentModal';
 import { PIXModal } from './components/PIXModal';
@@ -14,18 +14,9 @@ function App() {
   const [utmParams, setUtmParams] = useState(getStoredUTMParams());
 
   useEffect(() => {
-    // Capture and store UTM parameters on page load
-    const currentUTMParams = getUTMParams();
-    if (Object.keys(currentUTMParams).length > 0) {
-      storeUTMParams(currentUTMParams);
-      setUtmParams(currentUTMParams);
-    }
-    
-    // Track page view
-    trackEvent('upsell_page_view', {
-      page: 'upsell',
-      offer: 'combo_vip_150_numbers'
-    });
+    // Initialize UTM tracking system
+    initializeUTMTracking();
+    setUtmParams(getStoredUTMParams());
     
     const timer = setInterval(() => {
       setTimeLeft((prevTime) => {
@@ -137,14 +128,14 @@ function App() {
           {/* Botão Principal WhatsApp */}
           <div className="mb-6">
             <a 
-              href={(() => {
-                const baseMessage = "Oi! Acabei de ativar minha vantagem VIP e quero entrar no grupo para receber meus 150 números extras!";
-                const utmString = buildUTMString(utmParams);
-                return `https://wa.me/5511999999999?text=${encodeURIComponent(baseMessage)}${utmString}`;
-              })()}
+              href={getCheckoutUrl(`https://wa.me/5511999999999?text=${encodeURIComponent("Oi! Acabei de ativar minha vantagem VIP e quero entrar no grupo para receber meus 150 números extras!")}`)}
               target="_blank"
               rel="noopener noreferrer"
               className="block"
+              onClick={() => trackEvent('whatsapp_group_click', { 
+                source: 'thank_you_page',
+                offer: 'vip_group_access'
+              })}
             >
               <button className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold py-5 px-6 rounded-xl text-xl transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl w-full animate-pulse border-4 border-yellow-400">
                 <div className="flex items-center justify-center">

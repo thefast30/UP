@@ -1,15 +1,24 @@
 import React, { useState, useEffect } from 'react';
-import { getStoredUTMParams } from '../utils/utm';
+import { getStoredUTMParams, extractUTMFromURL } from '../utils/utm';
 
 // Debug component to show UTM parameters and tracked events (for development)
 export const TrackingDebug: React.FC = () => {
   const [utmParams, setUtmParams] = useState(getStoredUTMParams());
+  const [currentUTMParams, setCurrentUTMParams] = useState(extractUTMFromURL());
   const [trackedEvents, setTrackedEvents] = useState<any[]>([]);
   const [showDebug, setShowDebug] = useState(false);
 
   useEffect(() => {
     const events = JSON.parse(localStorage.getItem('tracked_events') || '[]');
     setTrackedEvents(events);
+    
+    // Update UTM params periodically
+    const interval = setInterval(() => {
+      setUtmParams(getStoredUTMParams());
+      setCurrentUTMParams(extractUTMFromURL());
+    }, 1000);
+    
+    return () => clearInterval(interval);
   }, []);
 
   // Only show in development
@@ -28,9 +37,14 @@ export const TrackingDebug: React.FC = () => {
       
       {showDebug && (
         <div className="absolute bottom-12 right-0 bg-white text-black p-4 rounded-lg shadow-xl max-w-md max-h-96 overflow-auto border">
-          <h3 className="font-bold text-sm mb-2">UTM Parameters:</h3>
+          <h3 className="font-bold text-sm mb-2">Stored UTM Parameters:</h3>
           <pre className="text-xs bg-gray-100 p-2 rounded mb-3 overflow-x-auto">
             {JSON.stringify(utmParams, null, 2)}
+          </pre>
+          
+          <h3 className="font-bold text-sm mb-2">Current URL UTM:</h3>
+          <pre className="text-xs bg-blue-50 p-2 rounded mb-3 overflow-x-auto">
+            {JSON.stringify(currentUTMParams, null, 2)}
           </pre>
           
           <h3 className="font-bold text-sm mb-2">Recent Events:</h3>
@@ -44,6 +58,15 @@ export const TrackingDebug: React.FC = () => {
                 )}
                 {event.utm_campaign && (
                   <div className="text-green-600">Campaign: {event.utm_campaign}</div>
+                )}
+                {event.click_id && (
+                  <div className="text-purple-600">Click ID: {event.click_id}</div>
+                )}
+                {event.fbclid && (
+                  <div className="text-blue-600">FB Click ID: {event.fbclid}</div>
+                )}
+                {event.gclid && (
+                  <div className="text-red-600">Google Click ID: {event.gclid}</div>
                 )}
               </div>
             ))}
