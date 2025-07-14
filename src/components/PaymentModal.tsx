@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { X, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
 import { gerarPix } from '../services/pixService';
+import { consultarCPF, formatCPF, validateCPF, CPFValidationResult } from '../services/cpfService';
+import { buildUTMString, getStoredUTMParams } from '../utils/utm';
 
 interface PaymentModalProps {
   isOpen: boolean;
@@ -13,13 +15,6 @@ interface FormData {
   phone: string;
 }
 
-interface CPFValidationResult {
-  isValid: boolean;
-  userData?: {
-    name: string;
-    email: string;
-  };
-}
 
 export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onSuccess }) => {
   const [formData, setFormData] = useState<FormData>({ cpf: '', phone: '' });
@@ -31,10 +26,6 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onS
 
   if (!isOpen) return null;
 
-  const formatCPF = (value: string) => {
-    const numbers = value.replace(/\D/g, '');
-    return numbers.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
-  };
 
   const formatPhone = (value: string) => {
     const numbers = value.replace(/\D/g, '');
@@ -44,49 +35,24 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onS
     return numbers.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
   };
 
-  const validateCPF = async (cpf: string) => {
-    const cpfLimpo = cpf.replace(/\D/g, '');
-    
-    if (cpfLimpo.length !== 11) {
-      setCpfError('CPF deve ter 11 dígitos');
-      setCpfValidation({ isValid: false });
-      return;
-    }
-
-    // Validação básica de CPF (verificar se não são todos números iguais)
-    if (/^(\d)\1{10}$/.test(cpfLimpo)) {
-      setCpfError('CPF inválido');
-      setCpfValidation({ isValid: false });
-      return;
-    }
-
+  const validateCPFAsync = async (cpf: string) => {
     setIsValidatingCPF(true);
     setCpfError('');
 
     try {
-      // Simulação de validação de CPF (removendo a API externa que pode estar causando problemas)
-      // Em produção, você pode usar uma API de validação de CPF confiável
-      await new Promise(resolve => setTimeout(resolve, 1500)); // Simula delay da API
+      const result = await consultarCPF(cpf);
       
-      setCpfValidation({ 
-        isValid: true, 
-        userData: {
-          name: 'Cliente Validado',
-          email: `cliente${cpfLimpo.slice(-4)}@email.com`
-        }
-      });
-      setCpfError('');
+      if (result.isValid) {
+        setCpfValidation(result);
+        setCpfError('');
+      } else {
+        setCpfValidation({ isValid: false });
+        setCpfError(result.error || 'CPF inválido');
+      }
     } catch (error) {
       console.error('Erro ao consultar CPF:', error);
-      // Em caso de erro na validação, ainda permite continuar
-      setCpfValidation({ 
-        isValid: true, 
-        userData: {
-          name: 'Cliente',
-          email: `cliente${cpfLimpo.slice(-4)}@email.com`
-        }
-      });
-      setCpfError('');
+      setCpfError('Erro ao validar CPF. Tente novamente.');
+      setCpfValidation({ isValid: false });
     } finally {
       setIsValidatingCPF(false);
     }
@@ -122,6 +88,10 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onS
     setIsGeneratingPIX(true);
 
     try {
+      // Obter parâmetros UTM para enviar junto com o PIX
+      const utmParams = getStoredUTMParams();
+      const utmQuery = buildUTMString(utmParams);
+      
       const phoneNumbers = formData.phone.replace(/\D/g, '');
       const cpfNumbers = formData.cpf.replace(/\D/g, '');
 
@@ -131,7 +101,8 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onS
         cpfNumbers,
         phoneNumbers,
         2990, // R$ 29,90 em centavos
-        "Combo VIP - 150 Números + Rifa VIP R$5.000 + Grupo VIP"
+        "Combo VIP - 150 Números + Rifa VIP R$5.000 + Grupo VIP",
+        utmQuery
       );
 
       onSuccess(result);
@@ -149,7 +120,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onS
     
     const cpfNumbers = value.replace(/\D/g, '');
     if (cpfNumbers.length === 11) {
-      validateCPF(formatted);
+      validateCPFAsync(formatted);
     } else {
       setCpfValidation({ isValid: false });
       setCpfError('');
@@ -240,7 +211,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onS
             )}
             {cpfValidation.isValid && cpfValidation.userData && (
               <div className="mt-2 text-green-600 text-sm">
-                ✅ CPF válido
+                ✅ CPF válido - {cpfValidation.userData.name}
               </div>
             )}
           </div>

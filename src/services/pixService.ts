@@ -1,7 +1,8 @@
-import { PixResponse, PixRequest } from '../types/pix';
+import { PixResponse } from '../types/pix';
 
 const SECRET_KEY = '31593d3e-f4ea-4937-ad1b-625a5fc647d1';
 const API_URL = 'https://pay.rushpayoficial.com/api/v1/transaction.purchase';
+const CHECK_STATUS_URL = 'https://pay.rushpayoficial.com/api/v1/transaction.status';
 
 export async function gerarPix(
   name: string,
@@ -9,47 +10,26 @@ export async function gerarPix(
   cpf: string,
   phone: string,
   amountCentavos: number,
-  itemName: string
+  itemName: string,
+  utmQuery?: string
 ): Promise<PixResponse> {
-  // Validações de entrada mais rigorosas
-  if (!name || name.trim().length < 2) {
-    throw new Error('Nome deve ter pelo menos 2 caracteres');
-  }
-  
-  if (!email || !email.includes('@')) {
-    throw new Error('Email inválido');
-  }
-  
-  const cpfLimpo = cpf.replace(/\D/g, '');
-  if (cpfLimpo.length !== 11) {
-    throw new Error('CPF deve ter 11 dígitos');
-  }
-  
-  const phoneLimpo = phone.replace(/\D/g, '');
-  if (phoneLimpo.length < 10 || phoneLimpo.length > 11) {
-    throw new Error('Telefone deve ter 10 ou 11 dígitos');
-  }
-  
-  if (amountCentavos <= 0) {
-    throw new Error('Valor deve ser maior que zero');
-  }
-
   if (!navigator.onLine) {
     throw new Error('Sem conexão com a internet. Por favor, verifique sua conexão e tente novamente.');
   }
 
-  const requestBody: PixRequest = {
-    name: name.trim(),
-    email: email.trim().toLowerCase(),
-    cpf: cpfLimpo,
-    phone: phoneLimpo,
+  const requestBody = {
+    name,
+    email,
+    cpf,
+    phone,
     paymentMethod: 'PIX',
     amount: amountCentavos,
     traceable: true,
+    utmQuery: utmQuery || '',
     items: [
       {
         unitPrice: amountCentavos,
-        title: itemName.trim(),
+        title: itemName,
         quantity: 1,
         tangible: false
       }
@@ -71,8 +51,7 @@ export async function gerarPix(
       headers: {
         'Content-Type': 'application/json',
         'Authorization': SECRET_KEY,
-        'Accept': 'application/json',
-        'User-Agent': 'UpsellApp/1.0'
+        'Accept': 'application/json'
       },
       body: JSON.stringify(requestBody)
     });
@@ -140,5 +119,27 @@ export async function gerarPix(
       throw new Error('Servidor indisponível. Por favor, tente novamente em alguns minutos.');
     }
     throw error;
+  }
+}
+
+export async function verificarStatusPagamento(transactionId: string): Promise<string> {
+  try {
+    const response = await fetch(`${CHECK_STATUS_URL}/${transactionId}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': SECRET_KEY,
+        'Accept': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Erro ao verificar status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data.status || 'pending';
+  } catch (error) {
+    console.error('Erro ao verificar status do pagamento:', error);
+    return 'error';
   }
 }
